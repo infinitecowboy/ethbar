@@ -1,0 +1,110 @@
+import AppKit
+
+final class StatusBarController {
+    private let statusItem: NSStatusItem
+    private var currentStatus: EthernetStatus = .disconnected
+    var onPreferences: (() -> Void)?
+    var onQuit: (() -> Void)?
+
+    init() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.button?.imagePosition = .imageOnly
+        buildMenu()
+    }
+
+    func updateIcon(_ image: NSImage) {
+        statusItem.button?.image = image
+    }
+
+    func updateStatus(_ status: EthernetStatus) {
+        self.currentStatus = status
+        buildMenu()
+    }
+
+    private func buildMenu() {
+        let menu = NSMenu()
+
+        if currentStatus.isConnected {
+            let header = NSMenuItem(title: "Ethernet Connected", action: nil, keyEquivalent: "")
+            header.isEnabled = false
+            menu.addItem(header)
+
+            menu.addItem(NSMenuItem.separator())
+
+            if let name = currentStatus.displayName ?? currentStatus.interfaceName {
+                let item = NSMenuItem(title: "Interface: \(name)", action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+            }
+
+            if let speed = currentStatus.linkSpeed {
+                let item = NSMenuItem(title: "Link Speed: \(speed)", action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+            }
+
+            if let ip = currentStatus.ipv4Address {
+                let item = NSMenuItem(title: "IP: \(ip)", action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+            }
+
+            if let mac = currentStatus.macAddress {
+                let item = NSMenuItem(title: "MAC: \(mac)", action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+            }
+
+            let showSpeeds = UserDefaults.standard.object(forKey: "ShowSpeeds") as? Bool ?? true
+            if showSpeeds {
+                menu.addItem(NSMenuItem.separator())
+                let up = formatSpeed(currentStatus.uploadBytesPerSec)
+                let down = formatSpeed(currentStatus.downloadBytesPerSec)
+                let throughput = NSMenuItem(title: "\u{2191} \(up)  \u{2193} \(down)", action: nil, keyEquivalent: "")
+                throughput.isEnabled = false
+                menu.addItem(throughput)
+            }
+        } else {
+            let header = NSMenuItem(title: "Disconnected", action: nil, keyEquivalent: "")
+            header.isEnabled = false
+            menu.addItem(header)
+        }
+
+        menu.addItem(NSMenuItem.separator())
+
+        let prefsItem = NSMenuItem(title: "Preferences\u{2026}", action: #selector(preferencesClicked), keyEquivalent: ",")
+        prefsItem.target = self
+        menu.addItem(prefsItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        let quitItem = NSMenuItem(title: "Quit EthBar", action: #selector(quitClicked), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+
+        statusItem.menu = menu
+    }
+
+    @objc private func preferencesClicked() {
+        onPreferences?()
+    }
+
+    @objc private func quitClicked() {
+        onQuit?()
+    }
+
+    // MARK: - Speed Formatting
+
+    private func formatSpeed(_ bytesPerSec: UInt64) -> String {
+        let b = Double(bytesPerSec)
+        if b < 1024 {
+            return "\(bytesPerSec) B/s"
+        } else if b < 1024 * 1024 {
+            return String(format: "%.0f KB/s", b / 1024)
+        } else if b < 1024 * 1024 * 1024 {
+            return String(format: "%.1f MB/s", b / (1024 * 1024))
+        } else {
+            return String(format: "%.2f GB/s", b / (1024 * 1024 * 1024))
+        }
+    }
+}
