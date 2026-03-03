@@ -23,35 +23,31 @@ final class StatusBarController {
 
     private func buildMenu() {
         let menu = NSMenu()
+        menu.autoenablesItems = false
 
         if currentStatus.isConnected {
             let header = NSMenuItem(title: "Ethernet Connected", action: nil, keyEquivalent: "")
-            header.isEnabled = false
             menu.addItem(header)
 
             menu.addItem(NSMenuItem.separator())
 
             if let name = currentStatus.displayName ?? currentStatus.interfaceName {
                 let item = NSMenuItem(title: "Interface: \(name)", action: nil, keyEquivalent: "")
-                item.isEnabled = false
                 menu.addItem(item)
             }
 
             if let speed = currentStatus.linkSpeed {
                 let item = NSMenuItem(title: "Link Speed: \(speed)", action: nil, keyEquivalent: "")
-                item.isEnabled = false
                 menu.addItem(item)
             }
 
             if let ip = currentStatus.ipv4Address {
                 let item = NSMenuItem(title: "IP: \(ip)", action: nil, keyEquivalent: "")
-                item.isEnabled = false
                 menu.addItem(item)
             }
 
             if let mac = currentStatus.macAddress {
                 let item = NSMenuItem(title: "MAC: \(mac)", action: nil, keyEquivalent: "")
-                item.isEnabled = false
                 menu.addItem(item)
             }
 
@@ -61,12 +57,26 @@ final class StatusBarController {
                 let up = formatSpeed(currentStatus.uploadBytesPerSec)
                 let down = formatSpeed(currentStatus.downloadBytesPerSec)
                 let throughput = NSMenuItem(title: "\u{2191} \(up)  \u{2193} \(down)", action: nil, keyEquivalent: "")
-                throughput.isEnabled = false
                 menu.addItem(throughput)
+            }
+
+            if !currentStatus.topApps.isEmpty {
+                menu.addItem(NSMenuItem.separator())
+                let header = NSMenuItem(title: "Top Traffic", action: nil, keyEquivalent: "")
+                menu.addItem(header)
+                for entry in currentStatus.topApps {
+                    let up = formatSpeed(entry.uploadBytesPerSec)
+                    let down = formatSpeed(entry.downloadBytesPerSec)
+                    let item = NSMenuItem(
+                        title: "  \(entry.appName)  \u{2191}\(up)  \u{2193}\(down)",
+                        action: nil,
+                        keyEquivalent: ""
+                    )
+                    menu.addItem(item)
+                }
             }
         } else {
             let header = NSMenuItem(title: "Disconnected", action: nil, keyEquivalent: "")
-            header.isEnabled = false
             menu.addItem(header)
         }
 
