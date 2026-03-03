@@ -28,7 +28,7 @@ final class PreferencesWindowController {
         let hostingView = NSHostingView(rootView: view)
 
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 460),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -206,7 +206,7 @@ struct PreferencesView: View {
             Spacer()
         }
         .padding()
-        .frame(width: 420, height: 420)
+        .frame(width: 420, height: 460)
         .onAppear {
             displayMode = renderer.displayMode
             displayStyle = renderer.displayStyle
