@@ -2,8 +2,35 @@ import Foundation
 import Network
 import SystemConfiguration
 
+enum ConnectionType {
+    case ethernet
+    case wifi
+
+    var label: String {
+        switch self {
+        case .ethernet: return "ENET"
+        case .wifi: return "WIFI"
+        }
+    }
+
+    var menuLabel: String {
+        switch self {
+        case .ethernet: return "Ethernet Connected"
+        case .wifi: return "Wi-Fi Connected"
+        }
+    }
+
+    var nettopFilter: String {
+        switch self {
+        case .ethernet: return "wired"
+        case .wifi: return "wifi"
+        }
+    }
+}
+
 struct EthernetStatus {
     var isConnected: Bool
+    var connectionType: ConnectionType?
     var interfaceName: String?
     var displayName: String?
     var linkSpeed: String?
@@ -15,6 +42,7 @@ struct EthernetStatus {
 
     static let disconnected = EthernetStatus(
         isConnected: false,
+        connectionType: nil,
         interfaceName: nil,
         displayName: nil,
         linkSpeed: nil,
@@ -33,12 +61,13 @@ protocol EthernetMonitorDelegate: AnyObject {
 final class EthernetMonitor {
     weak var delegate: EthernetMonitorDelegate?
 
-    private let pathMonitor = NWPathMonitor(requiredInterfaceType: .wiredEthernet)
+    private let pathMonitor = NWPathMonitor()
     private let monitorQueue = DispatchQueue(label: "com.ethernet.monitor")
     private var throughputTimer: DispatchSourceTimer?
     private var lastBytes: (inBytes: UInt64, outBytes: UInt64)?
     private var lastSampleTime: Date?
     private var currentBSDName: String?
+    private var currentConnectionType: ConnectionType?
     private var isConnected = false
     private let trafficMonitor = TrafficMonitor()
 
@@ -75,12 +104,30 @@ final class EthernetMonitor {
         set { UserDefaults.standard.set(newValue, forKey: "ShowTopApps") }
     }
 
+    var showInterfaceDetails: Bool {
+        get { UserDefaults.standard.object(forKey: "ShowInterfaceDetails") as? Bool ?? false }
+        set { UserDefaults.standard.set(newValue, forKey: "ShowInterfaceDetails") }
+    }
+
+    var useTrafficAverage: Bool {
+        get { UserDefaults.standard.object(forKey: "UseTrafficAverage") as? Bool ?? false }
+        set { UserDefaults.standard.set(newValue, forKey: "UseTrafficAverage") }
+    }
+
     func start() {
         pathMonitor.pathUpdateHandler = { [weak self] path in
             guard let self = self else { return }
-            let wiredAvailable = path.usesInterfaceType(.wiredEthernet)
+            // Prioritize ethernet over WiFi
+            let connectionType: ConnectionType?
+            if path.usesInterfaceType(.wiredEthernet) {
+                connectionType = .ethernet
+            } else if path.usesInterfaceType(.wifi) {
+                connectionType = .wifi
+            } else {
+                connectionType = nil
+            }
             self.monitorQueue.async {
-                self.handlePathUpdate(wiredAvailable: wiredAvailable)
+                self.handlePathUpdate(connectionType: connectionType)
             }
         }
         pathMonitor.start(queue: monitorQueue)
@@ -103,13 +150,16 @@ final class EthernetMonitor {
 
     // MARK: - Path Handling
 
-    private func handlePathUpdate(wiredAvailable: Bool) {
-        isConnected = wiredAvailable
+    private func handlePathUpdate(connectionType: ConnectionType?) {
+        let connected = connectionType != nil
+        isConnected = connected
+        currentConnectionType = connectionType
 
-        if wiredAvailable {
-            currentBSDName = findEthernetInterface()
+        if let connectionType = connectionType {
+            currentBSDName = findInterface(for: connectionType)
             lastBytes = nil
             lastSampleTime = nil
+            trafficMonitor.connectionType = connectionType
 
             let status = buildStatus(uploadPerSec: 0, downloadPerSec: 0)
             DispatchQueue.main.async { self.delegate?.didUpdateEthernetStatus(status) }
@@ -119,6 +169,7 @@ final class EthernetMonitor {
             }
         } else {
             currentBSDName = nil
+            currentConnectionType = nil
             stopThroughputTimer()
             trafficMonitor.reset()
             DispatchQueue.main.async { self.delegate?.didUpdateEthernetStatus(.disconnected) }
@@ -127,11 +178,19 @@ final class EthernetMonitor {
 
     // MARK: - Interface Discovery
 
-    private func findEthernetInterface() -> String? {
+    private func findInterface(for connectionType: ConnectionType) -> String? {
+        let scType: String
+        switch connectionType {
+        case .ethernet:
+            scType = kSCNetworkInterfaceTypeEthernet as String
+        case .wifi:
+            scType = kSCNetworkInterfaceTypeIEEE80211 as String
+        }
+
         guard let interfaces = SCNetworkInterfaceCopyAll() as? [SCNetworkInterface] else { return nil }
         for iface in interfaces {
             if let type = SCNetworkInterfaceGetInterfaceType(iface) as String?,
-               type == kSCNetworkInterfaceTypeEthernet as String {
+               type == scType {
                 return SCNetworkInterfaceGetBSDName(iface) as String?
             }
         }
@@ -165,6 +224,7 @@ final class EthernetMonitor {
 
         return EthernetStatus(
             isConnected: true,
+            connectionType: currentConnectionType,
             interfaceName: bsdName,
             displayName: displayName,
             linkSpeed: linkSpeed,
@@ -309,7 +369,9 @@ final class EthernetMonitor {
         lastBytes = counters
         lastSampleTime = now
 
-        let topApps = showTopApps ? trafficMonitor.sample() : []
+        let topApps = showTopApps
+            ? (useTrafficAverage ? trafficMonitor.sampleAverage() : trafficMonitor.sample())
+            : []
         let status = buildStatus(uploadPerSec: uploadPerSec, downloadPerSec: downloadPerSec, topApps: topApps)
         DispatchQueue.main.async { self.delegate?.didUpdateEthernetStatus(status) }
     }

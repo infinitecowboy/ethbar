@@ -26,7 +26,8 @@ final class StatusBarController {
         menu.autoenablesItems = false
 
         if currentStatus.isConnected {
-            let header = NSMenuItem(title: "Ethernet Connected", action: nil, keyEquivalent: "")
+            let headerTitle = currentStatus.connectionType?.menuLabel ?? "Connected"
+            let header = NSMenuItem(title: headerTitle, action: nil, keyEquivalent: "")
             menu.addItem(header)
 
             menu.addItem(NSMenuItem.separator())
@@ -41,14 +42,17 @@ final class StatusBarController {
                 menu.addItem(item)
             }
 
-            if let ip = currentStatus.ipv4Address {
-                let item = NSMenuItem(title: "IP: \(ip)", action: nil, keyEquivalent: "")
-                menu.addItem(item)
-            }
+            let showDetails = UserDefaults.standard.object(forKey: "ShowInterfaceDetails") as? Bool ?? false
+            if showDetails {
+                if let ip = currentStatus.ipv4Address {
+                    let item = NSMenuItem(title: "IP: \(ip)", action: nil, keyEquivalent: "")
+                    menu.addItem(item)
+                }
 
-            if let mac = currentStatus.macAddress {
-                let item = NSMenuItem(title: "MAC: \(mac)", action: nil, keyEquivalent: "")
-                menu.addItem(item)
+                if let mac = currentStatus.macAddress {
+                    let item = NSMenuItem(title: "MAC: \(mac)", action: nil, keyEquivalent: "")
+                    menu.addItem(item)
+                }
             }
 
             let showSpeeds = UserDefaults.standard.object(forKey: "ShowSpeeds") as? Bool ?? true
@@ -62,7 +66,8 @@ final class StatusBarController {
 
             if !currentStatus.topApps.isEmpty {
                 menu.addItem(NSMenuItem.separator())
-                let header = NSMenuItem(title: "Top Traffic", action: nil, keyEquivalent: "")
+                let useAvg = UserDefaults.standard.object(forKey: "UseTrafficAverage") as? Bool ?? false
+                let header = NSMenuItem(title: useAvg ? "Top Traffic (10m avg)" : "Top Traffic", action: nil, keyEquivalent: "")
                 menu.addItem(header)
                 for entry in currentStatus.topApps {
                     let up = formatSpeed(entry.uploadBytesPerSec)

@@ -6,9 +6,17 @@ struct AppTrafficEntry {
     let uploadBytesPerSec: UInt64
 }
 
+private struct TrafficSample {
+    let timestamp: Date
+    let entries: [String: (bytesIn: UInt64, bytesOut: UInt64)]
+}
+
 final class TrafficMonitor {
+    var connectionType: ConnectionType = .ethernet
     private var previousSnapshot: [String: (bytesIn: UInt64, bytesOut: UInt64)] = [:]
     private var previousTime: Date?
+    private var history: [TrafficSample] = []
+    private let historyWindow: TimeInterval = 600 // 10 minutes
 
     func sample() -> [AppTrafficEntry] {
         let now = Date()
@@ -49,9 +57,59 @@ final class TrafficMonitor {
         return Array(entries.prefix(5))
     }
 
+    func sampleAverage() -> [AppTrafficEntry] {
+        let now = Date()
+        let snapshot = takeSnapshot()
+
+        // Update instantaneous state too so switching modes stays seamless
+        previousSnapshot = snapshot
+        previousTime = now
+
+        // Append current snapshot and prune old entries
+        history.append(TrafficSample(timestamp: now, entries: snapshot))
+        let cutoff = now.addingTimeInterval(-historyWindow)
+        history.removeAll { $0.timestamp < cutoff }
+
+        guard history.count >= 2,
+              let oldest = history.first,
+              let newest = history.last else {
+            return []
+        }
+
+        let elapsed = newest.timestamp.timeIntervalSince(oldest.timestamp)
+        guard elapsed > 0 else { return [] }
+
+        // Compute average bytes/sec per app over the window
+        var entries: [AppTrafficEntry] = []
+        for (app, current) in newest.entries {
+            guard let prev = oldest.entries[app] else { continue }
+            let inDelta = current.bytesIn >= prev.bytesIn
+                ? current.bytesIn - prev.bytesIn
+                : current.bytesIn
+            let outDelta = current.bytesOut >= prev.bytesOut
+                ? current.bytesOut - prev.bytesOut
+                : current.bytesOut
+
+            let dlPerSec = UInt64(Double(inDelta) / elapsed)
+            let ulPerSec = UInt64(Double(outDelta) / elapsed)
+
+            if dlPerSec > 0 || ulPerSec > 0 {
+                entries.append(AppTrafficEntry(
+                    appName: app,
+                    downloadBytesPerSec: dlPerSec,
+                    uploadBytesPerSec: ulPerSec
+                ))
+            }
+        }
+
+        entries.sort { ($0.downloadBytesPerSec + $0.uploadBytesPerSec) > ($1.downloadBytesPerSec + $1.uploadBytesPerSec) }
+        return Array(entries.prefix(5))
+    }
+
     func reset() {
         previousSnapshot = [:]
         previousTime = nil
+        history = []
     }
 
     // MARK: - nettop
@@ -59,7 +117,7 @@ final class TrafficMonitor {
     private func takeSnapshot() -> [String: (bytesIn: UInt64, bytesOut: UInt64)] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/nettop")
-        process.arguments = ["-P", "-L", "1", "-n", "-x", "-J", "bytes_in,bytes_out", "-t", "wired"]
+        process.arguments = ["-P", "-L", "1", "-n", "-x", "-J", "bytes_in,bytes_out", "-t", connectionType.nettopFilter]
 
         let pipe = Pipe()
         process.standardOutput = pipe

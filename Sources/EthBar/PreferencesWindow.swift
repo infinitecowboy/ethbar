@@ -28,7 +28,7 @@ final class PreferencesWindowController {
         let hostingView = NSHostingView(rootView: view)
 
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 460),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 520),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -59,6 +59,8 @@ struct PreferencesView: View {
     @State private var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
     @State private var showSpeeds: Bool = UserDefaults.standard.object(forKey: "ShowSpeeds") as? Bool ?? true
     @State private var showTopApps: Bool = UserDefaults.standard.object(forKey: "ShowTopApps") as? Bool ?? false
+    @State private var showInterfaceDetails: Bool = UserDefaults.standard.object(forKey: "ShowInterfaceDetails") as? Bool ?? false
+    @State private var useTrafficAverage: Bool = UserDefaults.standard.object(forKey: "UseTrafficAverage") as? Bool ?? false
     @State private var pollInterval: Double = {
         let val = UserDefaults.standard.double(forKey: "PollInterval")
         return val > 0 ? val : 2.0
@@ -181,9 +183,23 @@ struct PreferencesView: View {
                             onSettingsChanged()
                         }
 
+                    Toggle("Show IP & MAC address", isOn: $showInterfaceDetails)
+                        .onChange(of: showInterfaceDetails) { newValue in
+                            ethernetMonitor.showInterfaceDetails = newValue
+                            onSettingsChanged()
+                        }
+
                     Toggle("Show top traffic by app", isOn: $showTopApps)
                         .onChange(of: showTopApps) { newValue in
                             ethernetMonitor.showTopApps = newValue
+                            onSettingsChanged()
+                        }
+
+                    Toggle("Use 10-minute average", isOn: $useTrafficAverage)
+                        .disabled(!showTopApps)
+                        .opacity(showTopApps ? 1 : 0.5)
+                        .onChange(of: useTrafficAverage) { newValue in
+                            ethernetMonitor.useTrafficAverage = newValue
                             onSettingsChanged()
                         }
 
@@ -206,7 +222,7 @@ struct PreferencesView: View {
             Spacer()
         }
         .padding()
-        .frame(width: 420, height: 460)
+        .frame(width: 420, height: 520)
         .onAppear {
             displayMode = renderer.displayMode
             displayStyle = renderer.displayStyle

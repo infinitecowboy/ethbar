@@ -56,6 +56,8 @@ AppDelegate
 | `ShowTopApps` | Bool | `false` |
 | `PollInterval` | Double | `2.0` |
 | `DisplaySizeClassOverride` | String? | `nil` |
+| `ShowInterfaceDetails` | Bool | `false` |
+| `UseTrafficAverage` | Bool | `false` |
 
 ## Key Implementation Details
 

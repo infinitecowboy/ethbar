@@ -15,8 +15,8 @@ enum DisplayStyle: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .compact: return "Compact (dot)"
-        case .medium: return "Medium (ETH)"
-        case .large: return "Large (ETH + speeds)"
+        case .medium: return "Medium (label)"
+        case .large: return "Large (label + speeds)"
         }
     }
 }
@@ -90,7 +90,7 @@ final class PillRenderer {
         return image
     }
 
-    // MARK: - Medium (dot + ETH in pill)
+    // MARK: - Medium (dot + label in pill)
 
     private func renderMedium(status: EthernetStatus) -> NSImage {
         let font = berkeleyMono(size: fontSize)
@@ -100,7 +100,7 @@ final class PillRenderer {
         let pillPadV: CGFloat = 2
         let cornerRadius: CGFloat = 4
 
-        let text = "ETH"
+        let text = status.connectionType?.label ?? "ENET"
         let textAttrs: [NSAttributedString.Key: Any] = [.font: font]
         let textSize = (text as NSString).size(withAttributes: textAttrs)
 
@@ -152,7 +152,7 @@ final class PillRenderer {
         return image
     }
 
-    // MARK: - Large (dot + ETH + speeds in pill)
+    // MARK: - Large (dot + label + speeds in pill)
 
     private func renderLarge(status: EthernetStatus) -> NSImage {
         let font = berkeleyMono(size: fontSize)
@@ -162,18 +162,19 @@ final class PillRenderer {
         let pillPadV: CGFloat = 2
         let cornerRadius: CGFloat = 4
 
+        let label = status.connectionType?.label ?? "ENET"
         let showSpeeds = UserDefaults.standard.object(forKey: "ShowSpeeds") as? Bool ?? true
-        var text = "ETH"
+        var text = label
         if status.isConnected && showSpeeds {
             let up = formatSpeed(status.uploadBytesPerSec)
             let down = formatSpeed(status.downloadBytesPerSec)
-            text = "ETH \u{2191}\(up) \u{2193}\(down)"
+            text = "\(label) \u{2191}\(up) \u{2193}\(down)"
         }
 
         let textAttrs: [NSAttributedString.Key: Any] = [.font: font]
 
         // Measure against a worst-case reference string so the pill never resizes
-        let refText = "ETH \u{2191}999M \u{2193}999M"
+        let refText = "WIFI \u{2191}999M \u{2193}999M"
         let refSize = (refText as NSString).size(withAttributes: textAttrs)
         let textSize = (text as NSString).size(withAttributes: textAttrs)
 
