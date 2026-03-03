@@ -58,6 +58,7 @@ struct PreferencesView: View {
     @State private var hideFromDock: Bool = UserDefaults.standard.object(forKey: "HideFromDock") as? Bool ?? true
     @State private var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled
     @State private var showSpeeds: Bool = UserDefaults.standard.object(forKey: "ShowSpeeds") as? Bool ?? true
+    @State private var showTopApps: Bool = UserDefaults.standard.object(forKey: "ShowTopApps") as? Bool ?? false
     @State private var pollInterval: Double = {
         let val = UserDefaults.standard.double(forKey: "PollInterval")
         return val > 0 ? val : 2.0
@@ -177,6 +178,12 @@ struct PreferencesView: View {
                     Toggle("Show upload/download speeds", isOn: $showSpeeds)
                         .onChange(of: showSpeeds) { newValue in
                             ethernetMonitor.showSpeeds = newValue
+                            onSettingsChanged()
+                        }
+
+                    Toggle("Show top traffic by app", isOn: $showTopApps)
+                        .onChange(of: showTopApps) { newValue in
+                            ethernetMonitor.showTopApps = newValue
                             onSettingsChanged()
                         }
 

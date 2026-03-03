@@ -11,6 +11,7 @@ struct EthernetStatus {
     var macAddress: String?
     var uploadBytesPerSec: UInt64
     var downloadBytesPerSec: UInt64
+    var topApps: [AppTrafficEntry]
 
     static let disconnected = EthernetStatus(
         isConnected: false,
@@ -20,7 +21,8 @@ struct EthernetStatus {
         ipv4Address: nil,
         macAddress: nil,
         uploadBytesPerSec: 0,
-        downloadBytesPerSec: 0
+        downloadBytesPerSec: 0,
+        topApps: []
     )
 }
 
@@ -38,6 +40,7 @@ final class EthernetMonitor {
     private var lastSampleTime: Date?
     private var currentBSDName: String?
     private var isConnected = false
+    private let trafficMonitor = TrafficMonitor()
 
     var pollInterval: TimeInterval {
         get {
@@ -60,11 +63,16 @@ final class EthernetMonitor {
                 } else {
                     stopThroughputTimer()
                     // Push an update without speeds
-                    let status = buildStatus(uploadPerSec: 0, downloadPerSec: 0)
+                    let status = buildStatus(uploadPerSec: 0, downloadPerSec: 0, topApps: [])
                     DispatchQueue.main.async { self.delegate?.didUpdateEthernetStatus(status) }
                 }
             }
         }
+    }
+
+    var showTopApps: Bool {
+        get { UserDefaults.standard.object(forKey: "ShowTopApps") as? Bool ?? false }
+        set { UserDefaults.standard.set(newValue, forKey: "ShowTopApps") }
     }
 
     func start() {
@@ -112,6 +120,7 @@ final class EthernetMonitor {
         } else {
             currentBSDName = nil
             stopThroughputTimer()
+            trafficMonitor.reset()
             DispatchQueue.main.async { self.delegate?.didUpdateEthernetStatus(.disconnected) }
         }
     }
@@ -131,7 +140,7 @@ final class EthernetMonitor {
 
     // MARK: - Build Status
 
-    private func buildStatus(uploadPerSec: UInt64, downloadPerSec: UInt64) -> EthernetStatus {
+    private func buildStatus(uploadPerSec: UInt64, downloadPerSec: UInt64, topApps: [AppTrafficEntry] = []) -> EthernetStatus {
         let bsdName = currentBSDName
         var ipv4: String?
         var mac: String?
@@ -162,7 +171,8 @@ final class EthernetMonitor {
             ipv4Address: ipv4,
             macAddress: mac,
             uploadBytesPerSec: uploadPerSec,
-            downloadBytesPerSec: downloadPerSec
+            downloadBytesPerSec: downloadPerSec,
+            topApps: topApps
         )
     }
 
@@ -299,7 +309,8 @@ final class EthernetMonitor {
         lastBytes = counters
         lastSampleTime = now
 
-        let status = buildStatus(uploadPerSec: uploadPerSec, downloadPerSec: downloadPerSec)
+        let topApps = showTopApps ? trafficMonitor.sample() : []
+        let status = buildStatus(uploadPerSec: uploadPerSec, downloadPerSec: downloadPerSec, topApps: topApps)
         DispatchQueue.main.async { self.delegate?.didUpdateEthernetStatus(status) }
     }
 
