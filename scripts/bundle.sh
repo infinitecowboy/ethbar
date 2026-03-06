@@ -19,6 +19,7 @@ cp ".build/release/$APP_NAME" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 cp "Resources/Info.plist" "$APP_BUNDLE/Contents/Info.plist"
 
 echo "Installing to /Applications…"
+rm -rf "/Applications/${APP_NAME}.app"
 cp -R "$APP_BUNDLE" "/Applications/${APP_NAME}.app"
 
 echo "Done! App bundle at: $APP_BUNDLE"
