@@ -14,7 +14,7 @@ enum DisplayStyle: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .compact: return "Compact (dot)"
+        case .compact: return "Compact (icon)"
         case .medium: return "Medium (label)"
         case .large: return "Large (label + speeds)"
         }
@@ -65,22 +65,60 @@ final class PillRenderer {
         }
     }
 
-    // MARK: - Compact (dot only)
+    // MARK: - Connection Icon
+
+    private func connectionIcon(for status: EthernetStatus, pointSize: CGFloat) -> NSImage? {
+        let symbolName: String
+        let color: NSColor
+
+        if status.isConnected, let type = status.connectionType {
+            color = .systemGreen
+            switch type {
+            case .ethernet: symbolName = "cable.connector"
+            case .wifi: symbolName = "wifi"
+            }
+        } else {
+            color = .systemRed
+            symbolName = "network.slash"
+        }
+
+        guard let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil) else {
+            return nil
+        }
+
+        let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .medium)
+            .applying(.init(hierarchicalColor: color))
+        return symbol.withSymbolConfiguration(config)
+    }
+
+    // MARK: - Compact (icon only)
 
     private func renderCompact(status: EthernetStatus) -> NSImage {
-        let dotSize: CGFloat = 6
-        let height: CGFloat = 18
         let padding: CGFloat = 2
+        let height: CGFloat = 18
 
+        if let icon = connectionIcon(for: status, pointSize: 14) {
+            let iconSize = icon.size
+            let image = NSImage(size: NSSize(width: iconSize.width + padding * 2, height: height), flipped: false) { rect in
+                let iconX = padding
+                let iconY = (height - iconSize.height) / 2
+                icon.draw(in: NSRect(x: iconX, y: iconY, width: iconSize.width, height: iconSize.height))
+                return true
+            }
+            image.isTemplate = false
+            return image
+        }
+
+        // Fallback: colored dot
+        let dotSize: CGFloat = 6
         let image = NSImage(size: NSSize(width: dotSize + padding * 2, height: height), flipped: false) { rect in
             let dotRect = NSRect(x: padding, y: (height - dotSize) / 2, width: dotSize, height: dotSize)
             let path = NSBezierPath(ovalIn: dotRect)
-
             if status.isConnected {
                 NSColor.systemGreen.setFill()
                 path.fill()
             } else {
-                NSColor.gray.setStroke()
+                NSColor.systemRed.setStroke()
                 path.lineWidth = 1.2
                 path.stroke()
             }
@@ -94,8 +132,10 @@ final class PillRenderer {
 
     private func renderMedium(status: EthernetStatus) -> NSImage {
         let font = berkeleyMono(size: fontSize)
-        let dotSize: CGFloat = 6
-        let spacing: CGFloat = 6
+        let iconPointSize: CGFloat = fontSize * 0.8
+        let icon = connectionIcon(for: status, pointSize: iconPointSize)
+        let iconSize = icon?.size ?? NSSize(width: 6, height: 6)
+        let spacing: CGFloat = 4
         let pillPadH: CGFloat = 6
         let pillPadV: CGFloat = 2
         let cornerRadius: CGFloat = 4
@@ -104,7 +144,7 @@ final class PillRenderer {
         let textAttrs: [NSAttributedString.Key: Any] = [.font: font]
         let textSize = (text as NSString).size(withAttributes: textAttrs)
 
-        let contentWidth = dotSize + spacing + textSize.width
+        let contentWidth = iconSize.width + spacing + textSize.width
         let totalWidth = contentWidth + pillPadH * 2
         let pillHeight = textSize.height + pillPadV * 2
         let height = max(18, ceil(pillHeight))
@@ -122,23 +162,27 @@ final class PillRenderer {
             pill.lineWidth = 1.0
             pill.stroke()
 
-            // Draw dot
-            let dotX = pillPadH
-            let dotY = (rect.height - dotSize) / 2
-            let dotRect = NSRect(x: dotX, y: dotY, width: dotSize, height: dotSize)
-            let dotPath = NSBezierPath(ovalIn: dotRect)
-
-            if status.isConnected {
-                NSColor.systemGreen.setFill()
-                dotPath.fill()
+            // Draw icon
+            let iconX = pillPadH
+            let iconY = (rect.height - iconSize.height) / 2
+            if let icon = icon {
+                icon.draw(in: NSRect(x: iconX, y: iconY, width: iconSize.width, height: iconSize.height))
             } else {
-                NSColor.gray.setStroke()
-                dotPath.lineWidth = 1.2
-                dotPath.stroke()
+                let dotSize: CGFloat = 6
+                let dotRect = NSRect(x: iconX, y: (rect.height - dotSize) / 2, width: dotSize, height: dotSize)
+                let dotPath = NSBezierPath(ovalIn: dotRect)
+                if status.isConnected {
+                    NSColor.systemGreen.setFill()
+                    dotPath.fill()
+                } else {
+                    NSColor.systemRed.setStroke()
+                    dotPath.lineWidth = 1.2
+                    dotPath.stroke()
+                }
             }
 
             // Draw text
-            let textX = pillPadH + dotSize + spacing
+            let textX = pillPadH + iconSize.width + spacing
             let textY = (rect.height - textSize.height) / 2
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: font,
@@ -156,8 +200,10 @@ final class PillRenderer {
 
     private func renderLarge(status: EthernetStatus) -> NSImage {
         let font = berkeleyMono(size: fontSize)
-        let dotSize: CGFloat = 6
-        let spacing: CGFloat = 6
+        let iconPointSize: CGFloat = fontSize * 0.8
+        let icon = connectionIcon(for: status, pointSize: iconPointSize)
+        let iconSize = icon?.size ?? NSSize(width: 6, height: 6)
+        let spacing: CGFloat = 4
         let pillPadH: CGFloat = 6
         let pillPadV: CGFloat = 2
         let cornerRadius: CGFloat = 4
@@ -178,7 +224,7 @@ final class PillRenderer {
         let refSize = (refText as NSString).size(withAttributes: textAttrs)
         let textSize = (text as NSString).size(withAttributes: textAttrs)
 
-        let contentWidth = dotSize + spacing + max(textSize.width, refSize.width)
+        let contentWidth = iconSize.width + spacing + max(textSize.width, refSize.width)
         let totalWidth = contentWidth + pillPadH * 2
         let pillHeight = textSize.height + pillPadV * 2
         let height = max(18, ceil(pillHeight))
@@ -196,23 +242,27 @@ final class PillRenderer {
             pill.lineWidth = 1.0
             pill.stroke()
 
-            // Draw dot
-            let dotX = pillPadH
-            let dotY = (rect.height - dotSize) / 2
-            let dotRect = NSRect(x: dotX, y: dotY, width: dotSize, height: dotSize)
-            let dotPath = NSBezierPath(ovalIn: dotRect)
-
-            if status.isConnected {
-                NSColor.systemGreen.setFill()
-                dotPath.fill()
+            // Draw icon
+            let iconX = pillPadH
+            let iconY = (rect.height - iconSize.height) / 2
+            if let icon = icon {
+                icon.draw(in: NSRect(x: iconX, y: iconY, width: iconSize.width, height: iconSize.height))
             } else {
-                NSColor.gray.setStroke()
-                dotPath.lineWidth = 1.2
-                dotPath.stroke()
+                let dotSize: CGFloat = 6
+                let dotRect = NSRect(x: iconX, y: (rect.height - dotSize) / 2, width: dotSize, height: dotSize)
+                let dotPath = NSBezierPath(ovalIn: dotRect)
+                if status.isConnected {
+                    NSColor.systemGreen.setFill()
+                    dotPath.fill()
+                } else {
+                    NSColor.systemRed.setStroke()
+                    dotPath.lineWidth = 1.2
+                    dotPath.stroke()
+                }
             }
 
             // Draw text
-            let textX = pillPadH + dotSize + spacing
+            let textX = pillPadH + iconSize.width + spacing
             let textY = (rect.height - textSize.height) / 2
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: font,
