@@ -94,14 +94,32 @@ final class PillRenderer {
     // MARK: - Compact (icon only)
 
     private func renderCompact(status: EthernetStatus) -> NSImage {
-        let padding: CGFloat = 2
-        let height: CGFloat = 18
+        let pillPadH: CGFloat = 5
+        let pillPadV: CGFloat = 2
+        let cornerRadius: CGFloat = 4
 
         if let icon = connectionIcon(for: status, pointSize: 14) {
             let iconSize = icon.size
-            let image = NSImage(size: NSSize(width: iconSize.width + padding * 2, height: height), flipped: false) { rect in
-                let iconX = padding
-                let iconY = (height - iconSize.height) / 2
+            let totalWidth = iconSize.width + pillPadH * 2
+            let pillHeight = iconSize.height + pillPadV * 2
+            let height = max(18, ceil(pillHeight))
+
+            let image = NSImage(size: NSSize(width: ceil(totalWidth), height: height), flipped: false) { rect in
+                // Draw pill outline
+                let pillRect = NSRect(
+                    x: 0.5,
+                    y: (rect.height - pillHeight) / 2,
+                    width: totalWidth - 1,
+                    height: pillHeight
+                )
+                let pill = NSBezierPath(roundedRect: pillRect, xRadius: cornerRadius, yRadius: cornerRadius)
+                NSColor.white.withAlphaComponent(0.5).setStroke()
+                pill.lineWidth = 1.0
+                pill.stroke()
+
+                // Draw icon
+                let iconX = pillPadH
+                let iconY = (rect.height - iconSize.height) / 2
                 icon.draw(in: NSRect(x: iconX, y: iconY, width: iconSize.width, height: iconSize.height))
                 return true
             }
@@ -109,10 +127,24 @@ final class PillRenderer {
             return image
         }
 
-        // Fallback: colored dot
+        // Fallback: colored dot with pill
         let dotSize: CGFloat = 6
-        let image = NSImage(size: NSSize(width: dotSize + padding * 2, height: height), flipped: false) { rect in
-            let dotRect = NSRect(x: padding, y: (height - dotSize) / 2, width: dotSize, height: dotSize)
+        let totalWidth = dotSize + pillPadH * 2
+        let pillHeight = dotSize + pillPadV * 2
+        let height: CGFloat = 18
+        let image = NSImage(size: NSSize(width: totalWidth, height: height), flipped: false) { rect in
+            let pillRect = NSRect(
+                x: 0.5,
+                y: (rect.height - pillHeight) / 2,
+                width: totalWidth - 1,
+                height: pillHeight
+            )
+            let pill = NSBezierPath(roundedRect: pillRect, xRadius: cornerRadius, yRadius: cornerRadius)
+            NSColor.white.withAlphaComponent(0.5).setStroke()
+            pill.lineWidth = 1.0
+            pill.stroke()
+
+            let dotRect = NSRect(x: pillPadH, y: (rect.height - dotSize) / 2, width: dotSize, height: dotSize)
             let path = NSBezierPath(ovalIn: dotRect)
             if status.isConnected {
                 NSColor.systemGreen.setFill()
