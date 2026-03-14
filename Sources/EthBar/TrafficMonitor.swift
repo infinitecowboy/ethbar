@@ -117,7 +117,11 @@ final class TrafficMonitor {
     private func takeSnapshot() -> [String: (bytesIn: UInt64, bytesOut: UInt64)] {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/nettop")
-        process.arguments = ["-P", "-L", "1", "-n", "-x", "-J", "bytes_in,bytes_out", "-t", connectionType.nettopFilter]
+        var args = ["-P", "-L", "1", "-n", "-x", "-J", "bytes_in,bytes_out"]
+        if let filter = connectionType.nettopFilter {
+            args += ["-t", filter]
+        }
+        process.arguments = args
 
         let pipe = Pipe()
         process.standardOutput = pipe

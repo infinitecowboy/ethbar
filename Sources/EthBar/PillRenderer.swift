@@ -72,10 +72,16 @@ final class PillRenderer {
         let color: NSColor
 
         if status.isConnected, let type = status.connectionType {
-            color = .systemGreen
             switch type {
-            case .ethernet: symbolName = "cable.connector"
-            case .wifi: symbolName = "wifi"
+            case .ethernet:
+                color = .systemGreen
+                symbolName = "cable.connector"
+            case .wifi:
+                color = .systemGreen
+                symbolName = "wifi"
+            case .vpn:
+                color = .systemBlue
+                symbolName = "lock.fill"
             }
         } else {
             color = .systemRed
@@ -88,7 +94,30 @@ final class PillRenderer {
 
         let config = NSImage.SymbolConfiguration(pointSize: pointSize, weight: .medium)
             .applying(.init(hierarchicalColor: color))
-        return symbol.withSymbolConfiguration(config)
+        guard let styled = symbol.withSymbolConfiguration(config) else { return nil }
+
+        // For VPN, overlay a small green/red status dot on the lock
+        if status.connectionType == .vpn {
+            let iconSize = styled.size
+            let dotSize: CGFloat = pointSize * 0.35
+            let composite = NSImage(size: iconSize, flipped: false) { rect in
+                styled.draw(in: rect)
+                let dotRect = NSRect(
+                    x: iconSize.width - dotSize,
+                    y: 0,
+                    width: dotSize,
+                    height: dotSize
+                )
+                let dotColor: NSColor = status.isConnected ? .systemGreen : .systemRed
+                dotColor.setFill()
+                NSBezierPath(ovalIn: dotRect).fill()
+                return true
+            }
+            composite.isTemplate = false
+            return composite
+        }
+
+        return styled
     }
 
     // MARK: - Compact (icon only)

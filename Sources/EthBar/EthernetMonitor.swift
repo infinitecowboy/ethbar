@@ -5,11 +5,13 @@ import SystemConfiguration
 enum ConnectionType {
     case ethernet
     case wifi
+    case vpn
 
     var label: String {
         switch self {
         case .ethernet: return "ENET"
         case .wifi: return "WIFI"
+        case .vpn: return "VPN"
         }
     }
 
@@ -17,13 +19,15 @@ enum ConnectionType {
         switch self {
         case .ethernet: return "Ethernet Connected"
         case .wifi: return "Wi-Fi Connected"
+        case .vpn: return "VPN Connected"
         }
     }
 
-    var nettopFilter: String {
+    var nettopFilter: String? {
         switch self {
         case .ethernet: return "wired"
         case .wifi: return "wifi"
+        case .vpn: return nil  // VPN traffic spans multiple interface types
         }
     }
 }
@@ -117,12 +121,15 @@ final class EthernetMonitor {
     func start() {
         pathMonitor.pathUpdateHandler = { [weak self] path in
             guard let self = self else { return }
-            // Prioritize ethernet over WiFi
+            // Prioritize ethernet over WiFi; detect VPN when path is
+            // satisfied but neither wired nor WiFi interface is in use.
             let connectionType: ConnectionType?
             if path.usesInterfaceType(.wiredEthernet) {
                 connectionType = .ethernet
             } else if path.usesInterfaceType(.wifi) {
                 connectionType = .wifi
+            } else if path.status == .satisfied {
+                connectionType = .vpn
             } else {
                 connectionType = nil
             }
@@ -179,19 +186,37 @@ final class EthernetMonitor {
     // MARK: - Interface Discovery
 
     private func findInterface(for connectionType: ConnectionType) -> String? {
-        let scType: String
         switch connectionType {
-        case .ethernet:
-            scType = kSCNetworkInterfaceTypeEthernet as String
-        case .wifi:
-            scType = kSCNetworkInterfaceTypeIEEE80211 as String
-        }
+        case .ethernet, .wifi:
+            let scType: String = connectionType == .ethernet
+                ? kSCNetworkInterfaceTypeEthernet as String
+                : kSCNetworkInterfaceTypeIEEE80211 as String
+            guard let interfaces = SCNetworkInterfaceCopyAll() as? [SCNetworkInterface] else { return nil }
+            for iface in interfaces {
+                if let type = SCNetworkInterfaceGetInterfaceType(iface) as String?,
+                   type == scType {
+                    return SCNetworkInterfaceGetBSDName(iface) as String?
+                }
+            }
+            return nil
 
-        guard let interfaces = SCNetworkInterfaceCopyAll() as? [SCNetworkInterface] else { return nil }
-        for iface in interfaces {
-            if let type = SCNetworkInterfaceGetInterfaceType(iface) as String?,
-               type == scType {
-                return SCNetworkInterfaceGetBSDName(iface) as String?
+        case .vpn:
+            return findVPNInterface()
+        }
+    }
+
+    /// Find the first active utun interface (used by WireGuard, IPSec, OpenVPN, etc.)
+    private func findVPNInterface() -> String? {
+        var ifaddr: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&ifaddr) == 0, let firstAddr = ifaddr else { return nil }
+        defer { freeifaddrs(ifaddr) }
+
+        for ptr in sequence(first: firstAddr, next: { $0.pointee.ifa_next }) {
+            let name = String(cString: ptr.pointee.ifa_name)
+            let flags = Int32(ptr.pointee.ifa_flags)
+            let isUp = (flags & IFF_UP) != 0 && (flags & IFF_RUNNING) != 0
+            if isUp && name.hasPrefix("utun") {
+                return name
             }
         }
         return nil
